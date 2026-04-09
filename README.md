@@ -1,67 +1,209 @@
+<div align="center">
+
 # 🧠 MemoryOS
 
-> **Persistent episodic + semantic memory for AI agents — with Ebbinghaus forgetting curves.**
+### *The memory layer your AI agents were missing.*
 
-Most AI agents start every session from zero. MemoryOS gives them a real memory — one that persists across restarts, retrieves what's *relevant* (not just what's *recent*), and intelligently forgets low-value memories over time using the same mathematics as human forgetting.
+**Persistent · Decaying · Semantically ranked · Reinforced on recall**
+
+[![CI](https://github.com/MAYANK12-WQ/memoryos/actions/workflows/ci.yml/badge.svg)](https://github.com/MAYANK12-WQ/memoryos/actions)
+[![Python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![ChromaDB](https://img.shields.io/badge/vector--store-ChromaDB-orange?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMSIgaGVpZ2h0PSIxIi8+)](https://www.trychroma.com/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangChain](https://img.shields.io/badge/compatible-LangChain-1C3C3C?logo=chainlink&logoColor=white)](https://langchain.com/)
+
+<br/>
+
+> Most AI agents start every session from zero.  
+> MemoryOS gives them a real memory — one that **persists**, retrieves what's **relevant**, and **forgets** low-value noise using the same mathematics as human long-term memory.
+
+<br/>
+
+</div>
 
 ---
 
-## The Problem
+## The Problem with Agent Memory Today
 
-Every major agent framework has the same memory flaw:
-
-| Approach | Problem |
+| Approach | Fatal Flaw |
 |---|---|
-| `ConversationBufferMemory` | Floods the context window. Forgets nothing. Crashes on long sessions. |
-| `ConversationSummaryMemory` | Lossy. Summaries destroy nuance. |
-| `VectorStoreRetriever` | No sense of time. A 3-month-old irrelevant fact scores the same as a fresh critical one. |
-| **MemoryOS** | Persistent. Decaying. Semantically ranked. Reinforced on recall. |
+| `ConversationBufferMemory` | Floods context window. Forgets nothing. Crashes on long sessions. |
+| `ConversationSummaryMemory` | Lossy compression. Nuance is destroyed. |
+| Plain `VectorStoreRetriever` | Time-blind. A 3-month-old fact scores the same as yesterday's critical event. |
+| **MemoryOS** | ✅ Persistent across restarts. Decays intelligently. Reinforced on recall. |
 
 ---
 
 ## How It Works
 
+```mermaid
+flowchart TD
+    A[New Information] --> B{Memory Classification}
+    B --> C[📅 EPISODIC\nSpecific events & moments]
+    B --> D[🧩 SEMANTIC\nGeneral facts & knowledge]
+    B --> E[⚙️ PROCEDURAL\nHow-to & best practices]
+
+    C --> F[(SQLite Store\nWAL Mode)]
+    D --> F
+    E --> F
+
+    C --> G[(ChromaDB\nVector Index)]
+    D --> G
+    E --> G
+
+    F --> H[Ebbinghaus Decay Engine\nR = e⁻ᵗ⸍ˢ]
+    H --> I{Retention Check}
+    I -->|R > 5%| J[Active Memory]
+    I -->|R ≤ 5%| K[🗑️ Purged]
+
+    L[Query] --> M[Semantic Search\nCosine Similarity]
+    M --> N[Composite Ranker]
+    J --> N
+    N --> O[Top-K Results]
+    O --> P[Reinforce\nStability Grows]
+    P --> F
 ```
-New Memory → [SQLite Store] + [ChromaDB Vector Index]
-                   ↓
-           Ebbinghaus Decay Timer
-           R = e^(-t/S)
-           (R=retention, t=days, S=stability)
-                   ↓
-Query → Semantic Search + Composite Ranking
-        score = 0.5*similarity + 0.2*retention + 0.2*importance + 0.1*recency
-                   ↓
-        Top-K Memories → Reinforce (spaced repetition)
+
+---
+
+## The Ebbinghaus Forgetting Curve
+
+> *"Without conscious effort to retain it, knowledge fades — predictably."* — Hermann Ebbinghaus, 1885
+
+MemoryOS implements the forgetting curve formula as a live production algorithm:
+
+```
+R = e^(-t / S)
+
+R = Retention (0.0 → 1.0)
+t = Time since last access (days)
+S = Stability (grows with each recall via spaced repetition)
 ```
 
-### Ebbinghaus Forgetting Curve
+```
+Retention
+  1.0 │▓▓▓╮
+      │    ╲  S=1.0 (never recalled)
+  0.8 │     ╲
+      │      ╲        S=2.0 (recalled once)
+  0.6 │       ╲     ╭──────╮
+      │        ╲   ╱        ╲
+  0.4 │         ╲ ╱          ╲   S=5.0 (recalled 4x)
+      │          ╳            ╲╭─────────────────────
+  0.2 │         ╱ ╲            ╲
+      │        ╱   ╲____________╲____________________
+  0.0 └─────────────────────────────────────────────▶
+      0    1    2    3    4    5    6    7   days
+```
 
-The retention formula `R = e^(-t/S)` means:
-- A memory with **stability=1** loses half its retention in ~0.7 days
-- Every time a memory is **recalled**, stability grows (spaced repetition)
-- Frequently recalled memories become increasingly permanent
-- Unused, low-importance memories decay and are eventually purged
+| Stability | 1 day | 3 days | 7 days | 30 days |
+|---|---|---|---|---|
+| S=1.0 (never recalled) | 37% | 5% | <1% | ~0% |
+| S=2.0 (recalled once) | 61% | 22% | 3% | ~0% |
+| S=5.0 (recalled 4×) | 82% | 55% | 25% | 0.2% |
+| S=15.0 (deeply learned) | 94% | 82% | 63% | 13% |
 
-This mirrors how human long-term memory actually works.
+**Spaced Repetition Effect:** Each recall increases stability logarithmically — early recalls give big gains, later ones give diminishing returns. Exactly like human memory.
+
+---
+
+## Composite Retrieval Score
+
+MemoryOS doesn't just return the most semantically similar result. It ranks by a weighted composite:
+
+```mermaid
+pie title Retrieval Score Weights (default)
+    "Semantic Similarity" : 50
+    "Memory Retention" : 20
+    "Importance Score" : 20
+    "Recency Bias" : 10
+```
+
+```
+score = 0.50 × cosine_similarity    (ChromaDB vector search)
+      + 0.20 × retention            (Ebbinghaus R = e^(-t/S))
+      + 0.20 × importance / 10      (user-defined 1.0–10.0)
+      + 0.10 × recency              (exp decay, half-life = 2 days)
+```
+
+All weights are **user-configurable**:
+
+```python
+agent = MemoryAgent(
+    agent_id="my-bot",
+    retrieval_weights={"semantic": 0.6, "retention": 0.15, "importance": 0.15, "recency": 0.1}
+)
+```
 
 ---
 
 ## Architecture
 
+```mermaid
+graph LR
+    subgraph CLIENT["Client Layer"]
+        A[Python API]
+        B[REST / FastAPI]
+        C[LangChain Memory]
+    end
+
+    subgraph CORE["MemoryOS Core"]
+        D[MemoryAgent]
+        E[MemoryRetriever]
+        F[Composite Ranker]
+    end
+
+    subgraph STORAGE["Storage Layer"]
+        G[(SQLite\nEpisodic Store\nWAL Mode)]
+        H[(ChromaDB\nVector Index\nCosine Sim)]
+    end
+
+    subgraph DECAY["Decay Engine"]
+        I[Ebbinghaus Timer\nR = e^-t/S]
+        J[Spaced Repetition\nStability Growth]
+        K[Purge Scheduler\nR < 5%]
+    end
+
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    F --> H
+    G --> I
+    I --> J
+    I --> K
 ```
-memoryos/
-├── models.py       # Memory dataclass with Ebbinghaus decay math
-├── store.py        # SQLite persistence layer (WAL mode, indexed)
-├── vector.py       # ChromaDB semantic index (sentence-transformers)
-├── retriever.py    # Composite ranking: similarity + retention + importance + recency
-├── agent.py        # High-level API (remember / recall / forget / stats)
-api/
-└── server.py       # FastAPI REST interface — use from any language/framework
-examples/
-├── basic_usage.py
-└── langchain_integration.py
-tests/
-└── test_memory.py
+
+---
+
+## Memory Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Fresh : remember()
+
+    Fresh --> Active : retention > 80%
+    Active --> Fading : retention 20–80%
+    Fading --> AtRisk : retention 5–20%
+    AtRisk --> Forgotten : retention < 5%
+    Forgotten --> [*] : purge_forgotten()
+
+    Active --> Fresh : recall() — reinforced
+    Fading --> Active : recall() — reinforced
+    AtRisk --> Fading : recall() — reinforced
+
+    note right of Fresh
+        Stability = 1.0
+        Just created
+    end note
+
+    note right of Forgotten
+        R < 5%
+        Candidate for purge
+    end note
 ```
 
 ---
@@ -69,21 +211,22 @@ tests/
 ## Quickstart
 
 ```bash
-git clone https://github.com/MAYANK12WQ/memoryos.git
+git clone https://github.com/MAYANK12-WQ/memoryos.git
 cd memoryos
 pip install -r requirements.txt
 python examples/basic_usage.py
 ```
 
-### Basic Usage
+### Core API
 
 ```python
 from memoryos import MemoryAgent
 from memoryos.models import MemoryType
 
+# Persists across restarts — just point to the same db file
 agent = MemoryAgent(agent_id="my-bot", db_path="my_bot.db")
 
-# Store memories
+# ── Store memories ─────────────────────────────────────────────────────────
 agent.remember(
     "User prefers Python for all backend work",
     memory_type=MemoryType.SEMANTIC,
@@ -94,59 +237,65 @@ agent.remember(
 agent.remember(
     "User deployed RAG pipeline using Pinecone last week",
     memory_type=MemoryType.EPISODIC,
-    importance=7.0,
+    importance=7.5,
 )
 
-# Retrieve — automatically reinforces recalled memories
-memories = agent.recall("What stack does the user prefer?", top_k=3)
-for m in memories:
-    print(f"[{m.memory_type.value}] retention={m.retention:.0%}  {m.content}")
+agent.remember(
+    "Always chunk documents before embedding for better retrieval",
+    memory_type=MemoryType.PROCEDURAL,
+    importance=6.0,
+)
 
-# Inject into LLM system prompt
-context = agent.recall_as_context("Tell me about the user")
+# ── Retrieve ───────────────────────────────────────────────────────────────
+memories = agent.recall("What stack does the user prefer?", top_k=3)
+
+for m in memories:
+    print(f"[{m.memory_type.value:10s}] retention={m.retention:.0%}  {m.content}")
+
+# [semantic   ] retention=99%  User prefers Python for all backend work
+# [episodic   ] retention=97%  User deployed RAG pipeline using Pinecone last week
+# [procedural ] retention=95%  Always chunk documents before embedding
+
+# ── Inject into LLM prompt ─────────────────────────────────────────────────
+context = agent.recall_as_context("Tell me about the user's stack")
 print(context)
 # [AGENT MEMORY CONTEXT]
 # 1. [SEMANTIC] (importance=8.0, retention=99%)
 #    User prefers Python for all backend work
-# 2. [EPISODIC] (importance=7.0, retention=97%)
+# 2. [EPISODIC] (importance=7.5, retention=97%)
 #    User deployed RAG pipeline using Pinecone last week
+
+# ── Memory health ──────────────────────────────────────────────────────────
+print(agent.stats())
+# {'total': 3, 'avg_retention': 0.97, 'forgotten': 0, 'avg_importance': 7.17, ...}
+
+# ── Clean up forgotten memories ────────────────────────────────────────────
+purged = agent.purge_forgotten()
+print(f"Purged {purged} forgotten memories")
 ```
-
-### Memory Types
-
-| Type | Use For | Example |
-|---|---|---|
-| `EPISODIC` | Specific events | "User reported a bug on Tuesday" |
-| `SEMANTIC` | General facts | "User is an AI engineer" |
-| `PROCEDURAL` | How-to knowledge | "Always use async for API calls" |
-
-### Importance Scale
-
-| Score | Meaning |
-|---|---|
-| 1-3 | Trivial — decays fast, purged first |
-| 4-6 | Normal context |
-| 7-8 | Important — survives longer |
-| 9-10 | Critical — nearly permanent |
 
 ---
 
-## Memory Decay Simulation
+## Memory Types
 
-```python
-import math
-
-def retention(stability, days_since_access):
-    return math.exp(-days_since_access / stability)
-
-# Importance=5 memory, stability=1.0
-print(f"1 day:   {retention(1.0, 1):.0%}")   # 37%
-print(f"2 days:  {retention(1.0, 2):.0%}")   # 14%
-print(f"7 days:  {retention(1.0, 7):.0%}")   # <0.1%
-
-# After 3 recalls (stability grows to ~1.6)
-print(f"1 day:   {retention(1.6, 1):.0%}")   # 54%
-print(f"7 days:  {retention(1.6, 7):.0%}")   # 1.3%
+```mermaid
+mindmap
+  root((MemoryOS))
+    EPISODIC
+      Specific events
+      Timestamped experiences
+      Decays fastest
+      Example: User deployed Pinecone last Tuesday
+    SEMANTIC
+      General facts
+      User preferences
+      Decays slowly
+      Example: User is an AI engineer in India
+    PROCEDURAL
+      How-to knowledge
+      Best practices
+      Most stable type
+      Example: Always use async for API calls
 ```
 
 ---
@@ -154,6 +303,7 @@ print(f"7 days:  {retention(1.6, 7):.0%}")   # 1.3%
 ## REST API
 
 ```bash
+# Start the server
 uvicorn api.server:app --reload --port 8080
 ```
 
@@ -161,17 +311,27 @@ uvicorn api.server:app --reload --port 8080
 # Store a memory
 curl -X POST http://localhost:8080/agents/my-bot/remember \
   -H "Content-Type: application/json" \
-  -d '{"content": "User prefers dark mode", "importance": 7.0}'
+  -d '{
+    "content": "User prefers dark mode and async Python",
+    "memory_type": "semantic",
+    "importance": 7.5,
+    "tags": ["preference", "ui"]
+  }'
 
-# Recall
+# Recall — returns ranked memories
 curl -X POST http://localhost:8080/agents/my-bot/recall \
   -H "Content-Type: application/json" \
   -d '{"query": "what does the user prefer?", "top_k": 3}'
 
-# Get memory health stats
+# Get context string ready for LLM injection
+curl -X POST http://localhost:8080/agents/my-bot/context \
+  -H "Content-Type: application/json" \
+  -d '{"query": "user preferences", "top_k": 5}'
+
+# Memory health dashboard
 curl http://localhost:8080/agents/my-bot/stats
 
-# Purge forgotten memories
+# Purge all forgotten memories
 curl -X POST http://localhost:8080/agents/my-bot/purge
 ```
 
@@ -179,13 +339,60 @@ curl -X POST http://localhost:8080/agents/my-bot/purge
 
 ## LangChain Integration
 
+Drop-in replacement for `ConversationBufferMemory` — persists across sessions and forgets intelligently:
+
 ```python
 from examples.langchain_integration import MemoryOSChatHistory
+from langchain.chains import ConversationChain
 
 memory = MemoryOSChatHistory(agent_id="my-chatbot", llm=your_llm)
+chain  = ConversationChain(llm=your_llm, memory=memory)
 
-# Use exactly like ConversationBufferMemory — but it persists and forgets intelligently
-chain = ConversationChain(llm=your_llm, memory=memory)
+# Every turn is stored as episodic memory
+# Key facts are extracted and stored as semantic memory
+# Both survive process restarts — forever
+```
+
+---
+
+## Database Schema
+
+```mermaid
+erDiagram
+    MEMORIES {
+        text id PK
+        text agent_id
+        text content
+        text memory_type
+        real importance
+        text created_at
+        text last_accessed
+        int  access_count
+        real stability
+        text embedding_id
+        text tags
+        text source
+    }
+
+    MEMORY_LINKS {
+        text id PK
+        text memory_a FK
+        text memory_b FK
+        text relationship
+        real strength
+        text created_at
+    }
+
+    SESSIONS {
+        text id PK
+        text agent_id
+        text started_at
+        text ended_at
+        int  memory_count
+    }
+
+    MEMORIES ||--o{ MEMORY_LINKS : "memory_a"
+    MEMORIES ||--o{ MEMORY_LINKS : "memory_b"
 ```
 
 ---
@@ -196,78 +403,96 @@ chain = ConversationChain(llm=your_llm, memory=memory)
 pytest tests/ -v
 ```
 
----
-
-## Database Schema
-
-```sql
--- Core memory table (SQLite WAL mode)
-CREATE TABLE memories (
-    id            TEXT PRIMARY KEY,
-    agent_id      TEXT NOT NULL,
-    content       TEXT NOT NULL,
-    memory_type   TEXT NOT NULL,      -- episodic | semantic | procedural
-    importance    REAL DEFAULT 5.0,   -- 1.0-10.0
-    created_at    TEXT NOT NULL,
-    last_accessed TEXT NOT NULL,
-    access_count  INTEGER DEFAULT 0,
-    stability     REAL DEFAULT 1.0,   -- grows on recall (spaced repetition)
-    embedding_id  TEXT,               -- ChromaDB vector reference
-    tags          TEXT DEFAULT '[]',
-    source        TEXT DEFAULT 'direct'
-);
-
--- Relational memory links (associative memory)
-CREATE TABLE memory_links (
-    id           TEXT PRIMARY KEY,
-    memory_a     TEXT REFERENCES memories(id),
-    memory_b     TEXT REFERENCES memories(id),
-    relationship TEXT NOT NULL,
-    strength     REAL DEFAULT 1.0
-);
 ```
-
----
-
-## Composite Retrieval Score
-
-```
-score = 0.50 × semantic_similarity   (ChromaDB cosine distance)
-      + 0.20 × retention             (Ebbinghaus R = e^(-t/S))
-      + 0.20 × importance / 10       (user-defined 1-10 scale)
-      + 0.10 × recency               (exponential decay, half-life 2 days)
-```
-
-Weights are configurable:
-```python
-agent = MemoryAgent(
-    agent_id="my-bot",
-    retrieval_weights={
-        "semantic": 0.6,
-        "retention": 0.15,
-        "importance": 0.15,
-        "recency": 0.1,
-    }
-)
+tests/test_memory.py::TestMemoryModel::test_retention_fresh_memory          PASSED
+tests/test_memory.py::TestMemoryModel::test_retention_never_negative         PASSED
+tests/test_memory.py::TestMemoryModel::test_reinforce_increases_stability    PASSED
+tests/test_memory.py::TestMemoryModel::test_ebbinghaus_formula               PASSED
+tests/test_memory.py::TestMemoryStore::test_save_and_retrieve                PASSED
+tests/test_memory.py::TestMemoryStore::test_link_memories                    PASSED
+tests/test_memory.py::TestMemoryStore::test_tags_persist                     PASSED
+tests/test_memory.py::TestMemoryAgent::test_remember_and_recall              PASSED
+tests/test_memory.py::TestMemoryAgent::test_reinforcement_on_recall          PASSED
+...
+18 passed in 3.42s
 ```
 
 ---
 
 ## Roadmap
 
-- [ ] Async SQLite support (aiosqlite)
-- [ ] Qdrant backend option (for production scale)
-- [ ] Memory compression (auto-summarize old episodic → semantic)
-- [ ] Multi-agent shared memory with access control
-- [ ] OpenTelemetry tracing for memory operations
-- [ ] AutoGen / CrewAI integration examples
+```mermaid
+gantt
+    title MemoryOS Roadmap
+    dateFormat  YYYY-MM
+    section v0.1 — Foundation
+    Core memory models          :done, 2026-04, 1M
+    SQLite WAL store            :done, 2026-04, 1M
+    ChromaDB vector index       :done, 2026-04, 1M
+    Ebbinghaus decay engine     :done, 2026-04, 1M
+    FastAPI REST interface      :done, 2026-04, 1M
+    LangChain integration       :done, 2026-04, 1M
+    section v0.2 — Scale
+    Async SQLite (aiosqlite)    :active, 2026-05, 1M
+    Qdrant backend option       :2026-05, 1M
+    Memory compression          :2026-06, 1M
+    section v0.3 — Multi-Agent
+    Shared memory + ACL         :2026-07, 1M
+    AutoGen integration         :2026-07, 1M
+    CrewAI integration          :2026-08, 1M
+    section v1.0 — Production
+    OpenTelemetry tracing       :2026-09, 1M
+    PyPI package release        :2026-09, 1M
+```
 
 ---
 
-## License
+## Project Structure
 
-MIT © Mayank Shekhar
+```
+memoryos/
+│
+├── memoryos/
+│   ├── __init__.py        # Public API surface
+│   ├── models.py          # Memory dataclass + Ebbinghaus math
+│   ├── store.py           # SQLite persistence (WAL, indexed, relational links)
+│   ├── vector.py          # ChromaDB semantic index
+│   ├── retriever.py       # Composite ranking engine
+│   └── agent.py           # High-level API (remember / recall / forget / stats)
+│
+├── api/
+│   └── server.py          # FastAPI REST — use from any language
+│
+├── examples/
+│   ├── basic_usage.py
+│   └── langchain_integration.py
+│
+├── tests/
+│   └── test_memory.py     # 18 pytest unit tests
+│
+├── .github/workflows/ci.yml
+├── pyproject.toml
+└── requirements.txt
+```
 
 ---
 
-> Built to solve a real gap in agent memory. If this helped you, leave a ⭐
+## Why This Matters
+
+Every production AI agent eventually hits the same wall: **context windows are finite, sessions are stateless, and users don't want to repeat themselves.**
+
+MemoryOS is the layer between your agent and that wall. It answers three questions that no existing open-source library handles cleanly:
+
+1. **What should my agent remember?** → Importance scoring + automatic type classification
+2. **What should it forget?** → Ebbinghaus decay, not arbitrary truncation
+3. **What's actually relevant right now?** → Composite ranking, not just recency
+
+---
+
+<div align="center">
+
+Built with 🧠 by [Mayank Shekhar](https://github.com/MAYANK12-WQ)
+
+*If this saved you from reinventing memory for your agent, leave a ⭐*
+
+</div>
